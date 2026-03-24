@@ -51,3 +51,22 @@ Wistful,I-IV-VI-I,yes
 Moody,II-I-V-VII,yes
 251, ii-V-I,yes
 Heroic, V-bVI-bVII-I,yes
+Style,Progression,Transposable
+Popular,i-iv-v-i,yes
+Popular,i-VI-III-VII,yes
+Popular,i-iv-V7-i,yes
+Popular,i-VII-VI-V,yes
+Popular,i-iv-VII-III-VI-ii°-V-i,no
+Popular,i-v-VI-v,yes
+Popular,i-III-VII-i,yes
+Popular,ii°-V-i,yes
+Popular,i-VI-iv-v,yes
+Popular,i-VII-i,yes
+Popular,i-v-iv-i,yes
+Jazz,ii°-V-i,yes
+Jazz,im7-IV7-bVIImaj7-bIIImaj7,no
+Rock,i-VI-III-VII,yes
+Rock,i-bVII-v-i,no
+Sad,i-v-VI-III-iv-i-iv-v,no
+Epic,i-VI-VII-i,yes
+Spanish,i-bVII-bVI-V,no
