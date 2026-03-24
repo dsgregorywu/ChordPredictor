@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "ChordPredictor",
+			"path": "."
+		},
+		{
+			"name": "Screenshots",
+			"path": "../Screenshots"
+		}
+	],
+	"settings": {}
+}

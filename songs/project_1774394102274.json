@@ -1,0 +1,28 @@
+{
+    "genre": "Jazz",
+    "id": "1774394102274",
+    "key": "C",
+    "sections": [
+        {
+            "chords": [
+                "I",
+                "VI",
+                "II",
+                "V"
+            ],
+            "id": 1774394102274,
+            "name": "Bar 1"
+        },
+        {
+            "chords": [
+                "II",
+                "V",
+                "I",
+                "vi"
+            ],
+            "id": 1774394123983,
+            "name": "Bar 2"
+        }
+    ],
+    "title": "Derec's Song"
+}
