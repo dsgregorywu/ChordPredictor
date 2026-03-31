@@ -1,0 +1,29 @@
+{
+    "genre": "Popular",
+    "id": "1774396524537",
+    "key": "C",
+    "quality": "Major",
+    "sections": [
+        {
+            "chords": [
+                "V",
+                "VI",
+                "I",
+                "V"
+            ],
+            "id": 1774396524537,
+            "name": "Section 1"
+        },
+        {
+            "chords": [
+                "I",
+                "IV",
+                "vi",
+                "V"
+            ],
+            "id": 1774396539828,
+            "name": "New Section"
+        }
+    ],
+    "title": "Major Song"
+}

@@ -1,0 +1,52 @@
+<div id="piano-diagram" style="width: 700px; margin: 30px auto 10px auto;"></div>
+<script>
+// --- Piano Diagram Rendering ---
+const PIANO_KEYS = [
+  "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+];
+const PIANO_OCTAVES = [3, 4, 5]; // Show 3 octaves for context
+
+function renderPianoDiagram(highlightNotes=[]) {
+  const container = document.getElementById('piano-diagram');
+  let html = '<svg width="700" height="120">';
+  let keyWidth = 40, keyHeight = 100, blackKeyHeight = 60, blackKeyWidth = 24;
+  let x = 0, keyIndex = 0;
+  let whiteKeys = [];
+  // Draw white keys
+  for (let octave of PIANO_OCTAVES) {
+    for (let i = 0; i < 12; i++) {
+      let note = PIANO_KEYS[i] + octave;
+      if (!PIANO_KEYS[i].includes('#')) {
+        let isHighlighted = highlightNotes.includes(note);
+        whiteKeys.push({note, x});
+        html += `<rect x="${x}" y="0" width="${keyWidth}" height="${keyHeight}" fill="${isHighlighted ? '#4CAF50' : 'white'}" stroke="black" stroke-width="1"/>`;
+        // Add note label
+        html += `<text x="${x+keyWidth/2}" y="90" text-anchor="middle" font-size="13" fill="${isHighlighted ? 'white' : '#333'}">${note}</text>`;
+        x += keyWidth;
+      }
+    }
+  }
+  // Draw black keys
+  x = 0;
+  for (let octave of PIANO_OCTAVES) {
+    for (let i = 0; i < 12; i++) {
+      let note = PIANO_KEYS[i] + octave;
+      if (PIANO_KEYS[i].includes('#')) {
+        // Black keys are between white keys
+        let offset = keyWidth * (i - Math.floor(i/12*7));
+        let whiteIndex = i - 1;
+        let blackX = x + (keyWidth - blackKeyWidth/2);
+        let isHighlighted = highlightNotes.includes(note);
+        // Only draw if not at the end of octave
+        if (PIANO_KEYS[(i-1+12)%12][1] !== '#') {
+          html += `<rect x="${blackX}" y="0" width="${blackKeyWidth}" height="${blackKeyHeight}" fill="${isHighlighted ? '#388E3C' : 'black'}" stroke="black" stroke-width="1"/>`;
+        }
+      }
+      if (!PIANO_KEYS[i].includes('#')) x += keyWidth;
+    }
+  }
+  html += '</svg>';
+  container.innerHTML = html;
+}
+// Example usage: renderPianoDiagram(["C4", "E4", "G4"]);
+</script>

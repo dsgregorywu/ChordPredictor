@@ -6,12 +6,25 @@
     <title>ChordTrie | Songwriter Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         :root { --sidebar-width: 250px; --accent: #4CAF50; --dark: #1f2937; --bg: #f3f4f6; }
         body { background-color: var(--bg); display: flex; font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; margin: 0; }
         
         /* Sidebar */
         #sidebar { width: var(--sidebar-width); height: 100vh; background: white; border-right: 1px solid #e5e7eb; position: fixed; padding: 20px; z-index: 100; }
+        
+        /* Hover Trash Logic */
+        .project-item-wrapper .btn-delete {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        .project-item-wrapper:hover .btn-delete {
+            opacity: 1;
+            pointer-events: auto;
+        }
         
         /* Main Layout */
         #main-content { margin-left: var(--sidebar-width); width: calc(100% - var(--sidebar-width)); padding: 40px; padding-bottom: 220px; }
@@ -34,6 +47,7 @@
             display: inline-flex; flex-direction: column; align-items: center;
             padding: 8px 16px; background: #f9fafb; border: 1px solid #e5e7eb; 
             border-radius: 8px; font-weight: bold; min-width: 60px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            cursor: pointer;
         }
 
         /* Bottom Suggestion Bar */
@@ -51,7 +65,7 @@
 <body>
 
 <div id="sidebar">
-    <h4 class="mb-4 text-success fw-bold"><i class="bi bi-music-note-beamed"></i> ChordTrie</h4>
+    <h4 class="mb-4 text-success fw-bold"><i class="bi bi-music-note-beamed"></i> Chord Planner</h4>
     <div class="d-flex justify-content-between align-items-center mb-2">
         <p class="section-label mb-0">My Projects</p>
         <button class="btn btn-sm btn-link text-success p-0" onclick="startNewProject()">
@@ -59,11 +73,11 @@
         </button>
     </div>
     <div id="project-list" class="list-group list-group-flush">
-        <button class="list-group-item list-group-item-action border-0 rounded mb-1 active"><i class="bi bi-file-earmark-music me-2"></i> Current Session</button>
-    </div>
+        </div>
 </div>
 
 <div id="main-content">
+    <div id="piano-diagram" style="width: 700px; margin: 30px auto 10px auto;"></div>
     <div class="d-flex justify-content-between align-items-start mb-5">
         <div class="w-75">
             <input type="text" id="projectTitle" class="h1 edit-input fw-bold mb-0" value="My New Song" oninput="syncProject()">
@@ -71,7 +85,10 @@
                 <div class="d-flex align-items-center gap-2">
                     <span class="small text-muted fw-bold">KEY</span>
                     <select id="keyRoot" class="form-select form-select-sm w-auto" onchange="syncProject()">
-                        <option value="C">C Major</option><option value="D">D Major</option><option value="G">G Major</option><option value="A">A Major</option><option value="E">E Major</option>
+                        <option value="C">C </option> <option value="C#">C# </option><option value="D">D </option><option value="D#">D# </option><option value="E">E </option><option value="F">F </option><option value="F#">F# </option><option value="G">G </option><option value="G#">G# </option><option value="A">A </option><option value="A#">A# </option><option value="B">B </option>
+                    </select>
+                    <select id="keyType" class="form-select form-select-sm w-auto" onchange="syncProject()">
+                        <option value="Major">Major</option><option value="Minor">Minor</option>
                     </select>
                 </div>
                 <div class="d-flex align-items-center gap-2">
@@ -87,8 +104,7 @@
         </button>
     </div>
 
-    <div id="sections-container">
-        </div>
+    <div id="sections-container"></div>
     
     <button class="btn btn-outline-primary w-100 py-3 border-dashed mt-3" style="border-style: dashed;" onclick="addSection()">
         <i class="bi bi-plus-circle me-2"></i> Add New Section
@@ -100,8 +116,7 @@
         <div class="row align-items-center">
             <div class="col-md-8">
                 <p class="section-label mb-2 text-white opacity-50">Next Suggestions for: <span id="active-section-name" class="text-white">...</span></p>
-                <div id="suggestionContainer" class="d-flex gap-2">
-                    </div>
+                <div id="suggestionContainer" class="d-flex gap-2"></div>
             </div>
             <div class="col-md-4">
                 <p class="section-label mb-2 text-white opacity-50">Manual Entry</p>
@@ -120,10 +135,9 @@
         id: Date.now().toString(),
         title: "My New Song",
         key: "C",
+        quality: "Major",
         genre: "Popular",
-        sections: [
-            { id: Date.now(), name: "Section 1", chords: [] }
-        ]
+        sections: [{ id: Date.now(), name: "Section 1", chords: [] }]
     };
 
     let activeSectionId = project.sections[0].id;
@@ -133,6 +147,7 @@
         const container = document.getElementById('sections-container');
         container.innerHTML = '';
 
+
         project.sections.forEach(section => {
             const isActive = section.id === activeSectionId;
             const card = document.createElement('div');
@@ -140,16 +155,17 @@
             card.onclick = () => setActiveSection(section.id);
 
             card.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex align-items-center mb-3">
+                    <button class="btn btn-light btn-sm me-3" title="Play section" onclick="event.stopPropagation(); playSectionChords(${section.id});"><i class="bi bi-play-fill"></i></button>
                     <input type="text" class="edit-input fw-bold text-dark h5 mb-0" 
-                           value="${section.name}" 
-                           oninput="renameSection(${section.id}, this.value)"
-                           onclick="event.stopPropagation()">
-                    <button class="btn btn-sm text-danger opacity-50" onclick="deleteSection(${section.id}, event)"><i class="bi bi-x-lg"></i></button>
+                        value="${section.name}" 
+                        oninput="renameSection(${section.id}, this.value)"
+                        onclick="event.stopPropagation()">
+                    <button class="btn btn-sm text-danger opacity-50 ms-auto" onclick="deleteSection(${section.id}, event)"><i class="bi bi-x-lg"></i></button>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
                     ${section.chords.length > 0 
-                        ? section.chords.map(c => `<div class="chord-pill">${c}</div>`).join('')
+                        ? section.chords.map((c, i) => `<div class="chord-pill" onclick="event.stopPropagation(); playIndividualChord('${c}')" oncontextmenu="event.preventDefault(); removeChordAtIndex(${section.id}, ${i})">${c}</div>`).join('')
                         : '<span class="text-muted small">Select this section and add chords below...</span>'}
                 </div>
             `;
@@ -160,11 +176,135 @@
         document.getElementById('active-section-name').innerText = activeObj ? activeObj.name : '...';
     }
 
+
     // 3. LOGIC & ACTIONS
+
+    // Play a section's chord progression by calling the backend
+    async function playSectionChords(sectionId) {
+        const section = project.sections.find(s => s.id === sectionId);
+        if (!section || !section.chords.length) return;
+        const key = project.key || "C";
+        const quality = project.quality || "Major";
+        try {
+            await fetch('http://127.0.0.1:8000/play_section', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    progression: section.chords,
+                    key: key,
+                    quality: quality,
+                    duration: 0.7
+                })
+            });
+        } catch (err) {
+            alert('Could not play progression. Is the backend running?');
+        }
+    }
+
+    function playIndividualChord(symbol) {
+        const key = project.key || "C";
+        const quality = project.quality || "Major";
+        try {
+            fetch('http://127.0.0.1:8000/play_chord', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chord: symbol,
+                    key: key,
+                    quality: quality,
+                    duration: .7
+                })
+            });
+            // Visualize chord on piano
+            highlightChordOnPiano(symbol, key, quality);
+        } catch (err) {
+            alert('Could not play chord. Is the backend running?');
+        }
+    }
+
+// --- Piano Diagram Rendering ---
+const PIANO_KEYS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const PIANO_OCTAVES = [3, 4, 5]; // Show 3 octaves for context
+
+function renderPianoDiagram(highlightNotes=[]) {
+    const container = document.getElementById('piano-diagram');
+    console.log('Rendering piano diagram, highlightNotes:', highlightNotes);
+    let html = '<svg width="700" height="120">';
+    let keyWidth = 40, keyHeight = 100, blackKeyHeight = 60, blackKeyWidth = 24;
+    let whiteNotes = ["C", "D", "E", "F", "G", "A", "B"];
+    let blackNotes = {"C": "C#", "D": "D#", "F": "F#", "G": "G#", "A": "A#"};
+    let x = 0;
+    // Debug: log highlightNotes
+    console.log('Highlighting notes:', highlightNotes);
+    // Draw white keys in correct order
+    for (let octave of PIANO_OCTAVES) {
+        for (let w = 0; w < whiteNotes.length; w++) {
+            let note = whiteNotes[w] + octave;
+            // Debug: log each note
+            // console.log('White key:', note, 'highlight:', highlightNotes.includes(note));
+            let isHighlighted = highlightNotes.some(n => n === note);
+            html += `<rect x="${x}" y="0" width="${keyWidth}" height="${keyHeight}" fill="${isHighlighted ? '#4CAF50' : 'white'}" stroke="black" stroke-width="1"/>`;
+            html += `<text x="${x+keyWidth/2}" y="90" text-anchor="middle" font-size="13" fill="${isHighlighted ? 'white' : '#333'}">${note}</text>`;
+            x += keyWidth;
+        }
+    }
+    // Draw black keys in correct position
+    x = 0;
+    for (let octave of PIANO_OCTAVES) {
+        for (let w = 0; w < whiteNotes.length; w++) {
+            let white = whiteNotes[w];
+            let black = blackNotes[white];
+            if (black) {
+                let note = black + octave;
+                // Debug: log each black note
+                // console.log('Black key:', note, 'highlight:', highlightNotes.includes(note));
+                let isHighlighted = highlightNotes.some(n => n === note);
+                let blackX = x + keyWidth - blackKeyWidth/2;
+                // Don't draw black key after E or B
+                if (white !== "E" && white !== "B") {
+                    html += `<rect x="${blackX}" y="0" width="${blackKeyWidth}" height="${blackKeyHeight}" fill="${isHighlighted ? '#388E3C' : 'black'}" stroke="black" stroke-width="1"/>`;
+                }
+            }
+            x += keyWidth;
+        }
+    }
+    html += '</svg>';
+    container.innerHTML = html;
+}
+
+// --- Highlight Chord on Piano ---
+function highlightChordOnPiano(symbol, key, quality) {
+    // Use backend logic to get absolute chord notes
+    fetch('http://127.0.0.1:8000/get_chord_notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chord: symbol, key: key, quality: quality })
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log('Received chord notes from backend:', data.notes);
+        if (data.notes) renderPianoDiagram(data.notes);
+        else renderPianoDiagram([]);
+    })
+    .catch((err) => {
+        console.error('Error fetching chord notes:', err);
+        renderPianoDiagram([]);
+    });
+}
+
+// Initial render
+renderPianoDiagram([]);
+
     function setActiveSection(id) {
         activeSectionId = id;
         renderProject();
         getPredictions();
+    }
+
+    async function playTestNote() {
+        await Tone.start(); // Prepares the browser audio context
+        const synth = new Tone.Synth().toDestination();
+        synth.triggerAttackRelease("C4", "8n");
     }
 
     function addSection() {
@@ -194,6 +334,7 @@
     function syncProject() {
         project.title = document.getElementById('projectTitle').value;
         project.key = document.getElementById('keyRoot').value;
+        project.quality = document.getElementById('keyType').value;
         project.genre = document.getElementById('genre').value;
         getPredictions();
     }
@@ -202,7 +343,6 @@
     async function getPredictions() {
         const activeSec = project.sections.find(s => s.id === activeSectionId);
         if (!activeSec) return;
-
         try {
             const response = await fetch('http://127.0.0.1:8000/predict', {
                 method: 'POST',
@@ -210,14 +350,13 @@
                 body: JSON.stringify({
                     progression: activeSec.chords,
                     key: project.key,
+                    quality: project.quality, // Send quality to Python
                     genre: project.genre
                 })
             });
             const data = await response.json();
             displaySuggestions(data);
-        } catch (err) {
-            console.log("Waiting for server...");
-        }
+        } catch (err) { console.log("Waiting for server..."); }
     }
 
     function displaySuggestions(data) {
@@ -237,16 +376,23 @@
         if (activeSec) {
             activeSec.chords.push(symbol);
             renderProject();
+            playIndividualChord(symbol);
             getPredictions();
         }
     }
 
     function addManualChord() {
         const val = document.getElementById('manualInput').value.trim();
-        if (val) {
-            addChord(val);
-            document.getElementById('manualInput').value = '';
+        if (!val) return;
+        // Validate chord using the same logic as backend
+        // Accepts roman numerals with optional flavor (e.g. IV, iim7, V7, etc)
+        const romanRegex = /^([b♭]?[iIvV]{1,3})(.*)$/;
+        if (!romanRegex.test(val)) {
+            alert('Invalid chord symbol. Use roman numerals like IV, ii, V7, etc.');
+            return;
         }
+        addChord(val);
+        document.getElementById('manualInput').value = '';
     }
 
     async function loadProjectList() {
@@ -254,38 +400,48 @@
         const projects = await response.json();
         
         const listContainer = document.getElementById('project-list');
-        listContainer.innerHTML = ''; // Clear current list
+        listContainer.innerHTML = ''; 
 
         projects.forEach(p => {
+            const wrapper = document.createElement('div');
+            wrapper.className = "d-flex align-items-center justify-content-between mb-1 project-item-wrapper";
+
             const btn = document.createElement('button');
-            btn.className = "list-group-item list-group-item-action border-0 rounded mb-1 small d-flex align-items-center";
+            btn.className = "list-group-item list-group-item-action border-0 rounded mb-0 small d-flex align-items-center flex-grow-1";
             btn.innerHTML = `<i class="bi bi-file-earmark-music me-2"></i> ${p.title}`;
-            
-            // When clicked, fetch the full data for that specific song
             btn.onclick = () => openProject(p.filename);
-            listContainer.appendChild(btn);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = "btn btn-link text-danger p-2 btn-delete";
+            delBtn.innerHTML = `<i class="bi bi-trash3"></i>`;
+            delBtn.onclick = (e) => { e.stopPropagation(); deleteProject(p.filename); };
+
+            wrapper.appendChild(btn);
+            wrapper.appendChild(delBtn);
+            listContainer.appendChild(wrapper);
         });
     }
 
-    // 2. Function to actually open a saved song
     async function openProject(filename) {
         const response = await fetch(`http://127.0.0.1:8000/load_project/${filename}`);
         const savedData = await response.json();
-        
-        // Overwrite the current global project with the saved one
         project = savedData; 
-        
-        // Refresh the UI to show the saved data
         document.getElementById('projectTitle').value = project.title;
         document.getElementById('keyRoot').value = project.key;
+        document.getElementById('keyType').value = project.quality;
         document.getElementById('genre').value = project.genre;
-        
         activeSectionId = project.sections[0].id;
         renderProject();
         getPredictions();
     }
 
-    // 3. Update Save function to refresh the sidebar after saving
+    async function deleteProject(filename) {
+        if (!confirm("Delete this song forever?")) return;
+        await fetch(`http://127.0.0.1:8000/delete_project/${filename}`, { method: 'DELETE' });
+        loadProjectList();
+        if (project.id === filename.replace('project_','').replace('.json','')) startNewProject();
+    }
+
     async function saveToDatabase() {
         const response = await fetch('http://127.0.0.1:8000/save_project', {
             method: 'POST',
@@ -293,8 +449,6 @@
             body: JSON.stringify(project)
         });
         const result = await response.json();
-        
-        // REFRESH THE SIDEBAR IMMEDIATELY
         loadProjectList(); 
         alert(result.message);
     }
@@ -307,19 +461,25 @@
             genre: "Popular",
             sections: [{ id: Date.now(), name: "Verse 1", chords: [] }]
         };
-        
-        // Update UI
         document.getElementById('projectTitle').value = project.title;
         renderProject();
         getPredictions();
-}
+    }
 
-// 4. Run this automatically when the page first opens
-window.onload = () => {
-    loadProjectList();
-    renderProject();
-};
+    window.onload = () => {
+        loadProjectList();
+        renderProject();
+    };
+
+    // Remove a chord at a specific index from a section
+    function removeChordAtIndex(sectionId, chordIndex) {
+        const section = project.sections.find(s => s.id === sectionId);
+        if (section && section.chords.length > chordIndex) {
+            section.chords.splice(chordIndex, 1);
+            renderProject();
+            getPredictions();
+        }
+    }
 </script>
-
 </body>
 </html>
