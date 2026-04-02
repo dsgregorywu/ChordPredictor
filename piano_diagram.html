@@ -1,4 +1,4 @@
-<div id="piano-diagram" style="width: 700px; margin: 30px auto 10px auto;"></div>
+<div id="piano-diagram" style="width: 100%; margin: 30px auto 10px auto;"></div>
 <script>
 // --- Piano Diagram Rendering ---
 const PIANO_KEYS = [
@@ -8,7 +8,7 @@ const PIANO_OCTAVES = [3, 4, 5]; // Show 3 octaves for context
 
 function renderPianoDiagram(highlightNotes=[]) {
   const container = document.getElementById('piano-diagram');
-  let html = '<svg width="700" height="120">';
+  let html = '<svg width="100%" height="120">';
   let keyWidth = 40, keyHeight = 100, blackKeyHeight = 60, blackKeyWidth = 24;
   let x = 0, keyIndex = 0;
   let whiteKeys = [];

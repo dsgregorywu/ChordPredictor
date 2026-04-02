@@ -3,9 +3,7 @@ import numpy as np
 import sounddevice as sd
 
 class TheoryEngine:
-    NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-    
-    # The absolute semitone offsets for the two different modes
+    NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]    
     MODES = {
         "Major": {
             'i': 0, 'I': 0, 'bii': 1, 'bII': 1, 'ii': 2, 'II': 2, 'biii': 3, 'bIII': 3,
@@ -18,17 +16,14 @@ class TheoryEngine:
         }
     }
     FREQUENCIES = {
-        # Octave 3 (Low/Bass range)
         "C3": 130.81, "C#3": 138.59, "D3": 146.83, "D#3": 155.56,
         "E3": 164.81, "F3": 174.61, "F#3": 185.00, "G3": 196.00,
         "G#3": 207.65, "A3": 220.00, "A#3": 233.08, "B3": 246.94,
 
-        # Octave 4 (Middle range / "Middle C")
         "C4": 261.63, "C#4": 277.18, "D4": 293.66, "D#4": 311.13,
         "E4": 329.63, "F4": 349.23, "F#4": 369.99, "G4": 392.00,
         "G#4": 415.30, "A4": 440.00, "A#4": 466.16, "B4": 493.88,
 
-        # Octave 5 (High range)
         "C5": 523.25, "C#5": 554.37, "D5": 587.33, "D#5": 622.25,
         "E5": 659.25, "F5": 698.46, "F#5": 739.99, "G5": 783.99,
         "G#5": 830.61, "A5": 880.00, "A#5": 932.33, "B5": 987.77
@@ -38,39 +33,48 @@ class TheoryEngine:
     @staticmethod
     def get_absolute_chord(key_root, symbol, quality="Major"):
         import re
-        # Match the Roman numeral root (with optional b/♭) and the rest as flavor
-        m = re.match(r"([b♭]?[iIvV]{1,3})(.*)", symbol)
+        m = re.match(r"([b#♭]?(?:i{1,3}|iv|vii|vi|v|IV|VII|VI|V|I{1,3}))(.*)", symbol)
         if not m:
             return symbol
         root_part, flavor = m.group(1), m.group(2)
-
-        # Normalize flats to 'b'
         root_part = root_part.replace('♭', 'b')
 
-        # Select the map based on the active project quality
+        diatonic_qualities = {
+            'Major': {
+                'I': '', 'ii': 'm', 'iii': 'm', 'IV': '', 'V': '', 'vi': 'm', 'vii': 'dim',
+                'bII': '', 'bIII': '', 'bVI': '', 'bVII': '', 'bV': '', 'bvii': 'dim', 'bv': '',
+            },
+            'Minor': {
+                'i': 'm', 'ii': 'dim', 'III': '', 'iv': 'm', 'v': 'm', 'VI': '', 'VII': '',
+                'bII': '', 'bIII': '', 'bVI': '', 'bVII': '', 'bV': '', 'bvii': 'dim', 'bv': '',
+            }
+        }
         mode_map = TheoryEngine.MODES.get(quality, TheoryEngine.MODES["Major"])
         if root_part not in mode_map:
             return symbol
-
-        # Clean up key root (handle flats if they come in as 'Bb' etc)
         key_root_fixed = key_root
         if key_root_fixed == "Bb": key_root_fixed = "A#"
         elif key_root_fixed == "Eb": key_root_fixed = "D#"
         elif key_root_fixed == "Ab": key_root_fixed = "G#"
         elif key_root_fixed == "Db": key_root_fixed = "C#"
         elif key_root_fixed == "Gb": key_root_fixed = "F#"
-        # Accept both b and # for accidentals
         key_root_fixed = key_root_fixed.replace('b', 'b').replace('#', '#')
-
         try:
             start_idx = TheoryEngine.NOTES.index(key_root_fixed.upper())
             offset = mode_map[root_part]
             chord_note = TheoryEngine.NOTES[(start_idx + offset) % 12]
-            # Only add 'm' if root is lowercase, flavor does not already start with 'm' or 'M', and not a diminished/aug chord
-            if root_part[0].islower() and not (flavor.startswith('m') or flavor.startswith('M') or 'dim' in flavor or 'aug' in flavor):
-                flavor = 'm' + flavor
+            # Determine diatonic quality
+            roman = root_part.replace('b','').replace('#','')
+            qmap = diatonic_qualities['Minor' if quality=="Minor" else 'Major']
+            # If flavor already specifies m, dim, aug, 7, etc, use it; otherwise, use diatonic
+            if not flavor or not (flavor.startswith('m') or 'dim' in flavor or 'aug' in flavor):
+                if roman in qmap and qmap[roman]:
+                    flavor = qmap[roman] + flavor
+            # For diminished, use 'dim' not 'm' (e.g., vii in major is Bdim)
+            if 'dim' in flavor and not flavor.startswith('dim'):
+                flavor = 'dim' + flavor.replace('dim','')
             return f"{chord_note}{flavor}"
-        except:
+        except Exception:
             return symbol
 
 class ChordNode:
@@ -79,20 +83,13 @@ class ChordNode:
         self.count = 0
         self.children = {}
         self.genres = set()
-        # Track if this node belongs to a Major or Minor sequence
         self.mode_counts = {"Major": 0, "Minor": 0}
 
 class ChordTrie:
     def __init__(self):
         self.root = ChordNode()
 
-    def insert(self, progression, genre="General"):
-        # ALGORITHM CHANGE: Detect mode from the data itself
-        # If the first chord is 'i', 'iv', or 'v', it's a Minor progression
-        # If it's 'I', 'IV', or 'V', it's Major.
-        first_chord = progression[0] if progression else "I"
-        detected_mode = "Minor" if first_chord[0].islower() else "Major"
-
+    def insert(self, progression, genre="General", quality="Major"):
         node = self.root
         for chord in progression:
             if chord not in node.children:
@@ -100,9 +97,31 @@ class ChordTrie:
             node = node.children[chord]
             node.count += 1
             node.genres.add(genre)
-            node.mode_counts[detected_mode] += 1
+            # Use the provided quality as the mode
+            if quality in node.mode_counts:
+                node.mode_counts[quality] += 1
+            else:
+                node.mode_counts[quality] = 1
 
     def predict_next(self, progression, key="C", quality="Major", genre=None):
+        if not progression:
+            # Only suggest chords that exist in the trie as first chords, weighted by actual frequency
+            first_chord_counts = {}
+            for child in self.root.children.values():
+                for mode in child.mode_counts:
+                    if quality == mode and child.mode_counts[mode] > 0:
+                        first_chord_counts[child.chord] = child.mode_counts[mode]
+            total = sum(first_chord_counts.values())
+            results = []
+            for sym, count in first_chord_counts.items():
+                display_name = TheoryEngine.get_absolute_chord(key, sym, quality)
+                prob = count / total if total > 0 else 0
+                results.append({
+                    "symbol": sym,
+                    "display": display_name,
+                    "probability": round(prob, 2)
+                })
+            return sorted(results, key=lambda x: x['probability'], reverse=True)
         # Try longest suffix to shortest, fallback to just last chord
         for start in range(len(progression)+1):
             node = self.root

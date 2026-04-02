@@ -27,7 +27,23 @@
         }
         
         /* Main Layout */
-        #main-content { margin-left: var(--sidebar-width); width: calc(100% - var(--sidebar-width)); padding: 40px; padding-bottom: 220px; }
+        #main-content { margin-left: var(--sidebar-width); width: calc(100% - var(--sidebar-width)); padding: 130px 40px 220px 40px; }
+
+        /* Fixed Header */
+        #header {
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-width);
+            right: 0;
+            width: calc(100% - var(--sidebar-width));
+            background: transparent;
+            box-shadow: none;
+            padding: 2px 0 10px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            z-index: 1100;
+        }
         
         /* Editable Inputs */
         .edit-input { border: 1px solid transparent; background: transparent; transition: 0.2s; padding: 5px; border-radius: 4px; width: 100%; }
@@ -63,9 +79,6 @@
     </style>
 </head>
 <body>
-<div id="header">
-    # Piano visualization goes here
-</div>
 <div id="sidebar">
     <h4 class="mb-4 text-success fw-bold"><i class="bi bi-music-note-beamed"></i> Chord Planner</h4>
     <div class="d-flex justify-content-between align-items-center mb-2">   
@@ -77,9 +90,10 @@
     <div id="project-list" class="list-group list-group-flush">
         </div>
 </div>
-
+<div id="header">
+    <div id="piano-diagram" style="width: 100%; height: 120px; position: relative;"></div>
+</div>
 <div id="main-content">
-    <div id="piano-diagram" style="width: 900px; margin: 0 auto 30px auto;"></div>
     <div class="d-flex justify-content-between align-items-start mb-5">
         <div class="w-75">
             <input type="text" id="projectTitle" class="h1 edit-input fw-bold mb-0" value="My New Song" oninput="syncProject()">
@@ -230,48 +244,78 @@ const PIANO_OCTAVES = [3, 4, 5]; // Show 3 octaves for context
 
 function renderPianoDiagram(highlightNotes=[]) {
     const container = document.getElementById('piano-diagram');
-    console.log('Rendering piano diagram, highlightNotes:', highlightNotes);
-    let html = '<svg width="900" height="120">';
-    let keyWidth = 40, keyHeight = 100, blackKeyHeight = 60, blackKeyWidth = 24;
+    // Calculate total number of white keys
     let whiteNotes = ["C", "D", "E", "F", "G", "A", "B"];
-    let blackNotes = {"C": "C#", "D": "D#", "F": "F#", "G": "G#", "A": "A#"};
+    let numWhiteKeys = whiteNotes.length * PIANO_OCTAVES.length;
+    let keyWidth = 40, keyHeight = 100, blackKeyHeight = 60, blackKeyWidth = 24;
+    let totalWidth = numWhiteKeys * keyWidth;
+    // Responsive: use viewBox and 100% width
+    let svg = `<svg width="100%" height="120" viewBox="0 0 ${totalWidth} 120" preserveAspectRatio="none" style="display:block;">`;
     let x = 0;
-    // Debug: log highlightNotes
-    console.log('Highlighting notes:', highlightNotes);
-    // Draw white keys in correct order
+    let labelData = [];
+    // Draw white keys
     for (let octave of PIANO_OCTAVES) {
         for (let w = 0; w < whiteNotes.length; w++) {
             let note = whiteNotes[w] + octave;
-            // Debug: log each note
-            // console.log('White key:', note, 'highlight:', highlightNotes.includes(note));
             let isHighlighted = highlightNotes.some(n => n === note);
-            html += `<rect x="${x}" y="0" width="${keyWidth}" height="${keyHeight}" fill="${isHighlighted ? '#4CAF50' : 'white'}" stroke="black" stroke-width="1"/>`;
-            html += `<text x="${x+keyWidth/2}" y="90" text-anchor="middle" font-size="13" fill="${isHighlighted ? 'white' : '#333'}">${note}</text>`;
+            svg += `<rect x="${x}" y="0" width="${keyWidth}" height="${keyHeight}" fill="${isHighlighted ? '#4CAF50' : 'white'}" stroke="black" stroke-width="1"/>`;
+            // Collect label info for HTML overlay
+            labelData.push({
+                note,
+                left: x,
+                width: keyWidth,
+                color: isHighlighted ? 'white' : '#333',
+                bg: isHighlighted ? '#4CAF50' : 'white'
+            });
             x += keyWidth;
         }
     }
-    // Draw black keys in correct position
+    // Draw black keys
     x = 0;
+    let blackNotes = {"C": "C#", "D": "D#", "F": "F#", "G": "G#", "A": "A#"};
     for (let octave of PIANO_OCTAVES) {
         for (let w = 0; w < whiteNotes.length; w++) {
             let white = whiteNotes[w];
             let black = blackNotes[white];
             if (black) {
                 let note = black + octave;
-                // Debug: log each black note
-                // console.log('Black key:', note, 'highlight:', highlightNotes.includes(note));
                 let isHighlighted = highlightNotes.some(n => n === note);
                 let blackX = x + keyWidth - blackKeyWidth/2;
-                // Don't draw black key after E or B
                 if (white !== "E" && white !== "B") {
-                    html += `<rect x="${blackX}" y="0" width="${blackKeyWidth}" height="${blackKeyHeight}" fill="${isHighlighted ? '#388E3C' : 'black'}" stroke="black" stroke-width="1"/>`;
+                    svg += `<rect x="${blackX}" y="0" width="${blackKeyWidth}" height="${blackKeyHeight}" fill="${isHighlighted ? '#388E3C' : 'black'}" stroke="black" stroke-width="1"/>`;
                 }
             }
             x += keyWidth;
         }
     }
-    html += '</svg>';
-    container.innerHTML = html;
+    svg += '</svg>';
+    // Set SVG
+    container.innerHTML = svg;
+    // Overlay HTML note labels
+    // Remove any existing labels
+    let oldLabels = container.querySelectorAll('.piano-label');
+    oldLabels.forEach(l => l.remove());
+    // Get actual rendered width
+    let renderedWidth = container.offsetWidth;
+    let scale = renderedWidth / totalWidth;
+    labelData.forEach(label => {
+        let div = document.createElement('div');
+        div.className = 'piano-label';
+        div.textContent = label.note;
+        div.style.position = 'absolute';
+        div.style.left = (label.left * scale) + 'px';
+        // Move label higher (from 90px to 65px) and increase font size
+        div.style.top = (45 * scale) + 'px';
+        div.style.width = (label.width * scale) + 'px';
+        div.style.textAlign = 'center';
+        div.style.fontSize = (15 * scale) + 'px';
+        div.style.color = label.color;
+        div.style.pointerEvents = 'none';
+        div.style.userSelect = 'none';
+        div.style.fontWeight = 'bold';
+        div.style.background = 'transparent';
+        container.appendChild(div);
+    });
 }
 
 // --- Highlight Chord on Piano ---

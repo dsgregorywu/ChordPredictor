@@ -89,7 +89,6 @@ class TheoryEngine:
             return symbol
         root_part, flavor = m.group(1), m.group(2)
         root_part = root_part.replace('♭', 'b')
-        # Use MAJOR_MAP or MINOR_MAP based on the SONG quality, not the chord's case
         if quality == "Minor":
             current_map = TheoryEngine.MINOR_MAP
         else:
@@ -133,14 +132,11 @@ class ChordTrie:
     def __init__(self):
         self.root = ChordNode()
 
-    def insert(self, progression, genre="General"):
-        # Detect mode from the data itself
-        first_chord = progression[0] if progression else "I"
-        detected_mode = "Minor" if first_chord[0].islower() else "Major"
+    def insert(self, progression, genre="General", quality="Major"):
         node = self.root
         for symbol in progression:
             key = node
-            quality = detected_mode
+            quality = quality if quality in ["Major", "Minor"] else "Major"
             abs_chord = chord_trie.TheoryEngine.get_absolute_chord(key, symbol, quality)
             import re
             m = re.match(r"([A-G]#?)(.*)", abs_chord)
@@ -203,11 +199,12 @@ def init_data():
             reader = csv.DictReader(csvfile)
             for row in reader:
                 genre = row.get("Style", "Popular")
+                mode = row.get("Mode", "Major")
                 raw = row["Progression"]
                 for dash in ['–', '—', '\u2010', '\u2011', '\u2012', '\u2013', '\u2014', '\u2015']:
                     raw = raw.replace(dash, '-')
                 progression = [c.strip() for c in raw.split('-') if c.strip()]
-                trie.insert(progression, genre=genre)
+                trie.insert(progression, genre=genre, quality=mode)
         print("Trie initialized successfully.")
     except FileNotFoundError:
         print("Error: CSV file not found.")
