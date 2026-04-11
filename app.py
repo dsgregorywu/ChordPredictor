@@ -1,3 +1,4 @@
+import hashlib
 import csv
 from flask import Flask, json, request, jsonify
 import importlib.util
@@ -6,13 +7,62 @@ import glob
 import os
 import sounddevice as sd
 
+app = Flask(__name__)
+CORS(app)
+
+# --- AUTHENTICATION ---
+def hash_password(password):
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'status': 'error', 'message': 'Username and password required'}), 400
+    try:
+        with open('users.json', 'r') as f:
+            users = json.load(f)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'User database error'}), 500
+    hashed_pw = hash_password(password)
+    for user in users:
+        if user['username'] == username and user['password'] == hashed_pw:
+            return jsonify({'status': 'success', 'message': 'Login successful'})
+    return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
+
+# Registration endpoint
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'status': 'error', 'message': 'Username and password required'}), 400
+    try:
+        with open('users.json', 'r') as f:
+            users = json.load(f)
+    except Exception as e:
+        users = []
+    if any(user['username'] == username for user in users):
+        return jsonify({'status': 'error', 'message': 'Username already exists'}), 409
+    hashed_pw = hash_password(password)
+    users.append({'username': username, 'password': hashed_pw})
+    try:
+        with open('users.json', 'w') as f:
+            json.dump(users, f, indent=2)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Could not save user'}), 500
+    return jsonify({'status': 'success', 'message': 'Registration successful'})
+
+
 SONGS_FOLDER = "songs"
 if not os.path.exists(SONGS_FOLDER):
     os.makedirs(SONGS_FOLDER)
 
 
-app = Flask(__name__)
-CORS(app)
+
 
 # Import BuiltChord from chord_trie.py with error handling
 import sys
@@ -241,7 +291,8 @@ def list_projects():
                 data = json.load(f)
                 projects.append({
                     "title": data.get('title', 'Untitled'),
-                    "filename": filename 
+                    "filename": filename,
+                    "owner": data.get('owner', None)
                 })
     return jsonify(projects)
 
