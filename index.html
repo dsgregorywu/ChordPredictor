@@ -244,7 +244,6 @@ const PIANO_OCTAVES = [3, 4, 5]; // Show 3 octaves for context
 
 function renderPianoDiagram(highlightNotes=[]) {
     const container = document.getElementById('piano-diagram');
-    // Calculate total number of white keys
     let whiteNotes = ["C", "D", "E", "F", "G", "A", "B"];
     let numWhiteKeys = whiteNotes.length * PIANO_OCTAVES.length;
     let keyWidth = 40, keyHeight = 100, blackKeyHeight = 60, blackKeyWidth = 24;
