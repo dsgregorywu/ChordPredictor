@@ -1,19 +1,47 @@
 import hashlib
 import csv
-from flask import Flask, json, request, jsonify
+from flask import Flask, json, request, jsonify, session
 import importlib.util
-from flask_cors import CORS 
+from flask_cors import CORS
 import glob
 import os
 import sounddevice as sd
 
+
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)
+app.secret_key = 'super-secret-key'  # Change this in production!
 
 # --- AUTHENTICATION ---
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
+
+# Registration endpoint
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'status': 'error', 'message': 'Username and password required'}), 400
+    try:
+        with open('users.json', 'r') as f:
+            users = json.load(f)
+    except Exception:
+        users = []
+    if any(user['username'] == username for user in users):
+        return jsonify({'status': 'error', 'message': 'Username already exists'}), 409
+    hashed_pw = hash_password(password)
+    users.append({'username': username, 'password': hashed_pw})
+    try:
+        with open('users.json', 'w') as f:
+            json.dump(users, f, indent=2)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': 'Could not save user'}), 500
+    return jsonify({'status': 'success', 'message': 'Registration successful'})
+
+# Session login endpoint (with session)
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json
@@ -29,32 +57,24 @@ def login():
     hashed_pw = hash_password(password)
     for user in users:
         if user['username'] == username and user['password'] == hashed_pw:
+            session['username'] = username
             return jsonify({'status': 'success', 'message': 'Login successful'})
     return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
 
-# Registration endpoint
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    if not username or not password:
-        return jsonify({'status': 'error', 'message': 'Username and password required'}), 400
-    try:
-        with open('users.json', 'r') as f:
-            users = json.load(f)
-    except Exception as e:
-        users = []
-    if any(user['username'] == username for user in users):
-        return jsonify({'status': 'error', 'message': 'Username already exists'}), 409
-    hashed_pw = hash_password(password)
-    users.append({'username': username, 'password': hashed_pw})
-    try:
-        with open('users.json', 'w') as f:
-            json.dump(users, f, indent=2)
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': 'Could not save user'}), 500
-    return jsonify({'status': 'success', 'message': 'Registration successful'})
+# Logout endpoint
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.pop('username', None)
+    return jsonify({'status': 'success', 'message': 'Logged out'})
+
+# Endpoint to check current user
+@app.route('/me', methods=['GET'])
+def me():
+    username = session.get('username')
+    if username:
+        return jsonify({'status': 'success', 'username': username})
+    else:
+        return jsonify({'status': 'error', 'message': 'Not logged in'}), 401
 
 
 SONGS_FOLDER = "songs"
@@ -107,7 +127,7 @@ def play_section():
             seventh = 'Minor'
         elif 'dim7' in flavor:
             seventh = 'Diminished'
-        chord = chord_trie.BuiltChord(root, q, seventh)
+        chord = chord_trie.BuiltChord(root, flavor)
         chord.buildchord()
         chord.play(duration=duration)
     return jsonify({'status': 'ok'})
@@ -217,7 +237,7 @@ class ChordTrie:
                 seventh = 'Minor'
             elif 'dim7' in flavor:
                 seventh = 'Diminished'
-            chord = chord_trie.BuiltChord(root, q, seventh)
+            chord = chord_trie.BuiltChord(root, flavor)
             chord.buildchord()
             chord.play(duration=.8)
             results = []
@@ -349,7 +369,7 @@ def play_chord():
         seventh = 'Minor'
     elif 'dim7' in flavor:
         seventh = 'Diminished'
-    chord = chord_trie.BuiltChord(root, q, seventh)
+    chord = chord_trie.BuiltChord(root, flavor)
     chord.buildchord()
     chord.play(duration=duration)
     return jsonify({'status': 'ok'})
@@ -366,24 +386,7 @@ def get_chord_notes():
     if not m:
         return jsonify({'notes': []})
     root, flavor = m.group(1), m.group(2)
-    if 'dim' in flavor:
-        q = 'Diminished'
-    elif 'aug' in flavor:
-        q = 'Augmented'
-    elif 'm' in flavor and not flavor.startswith('M'):
-        q = 'Minor'
-    else:
-        q = 'Major'
-    seventh = None
-    if 'maj7' in flavor or 'M7' in flavor:
-        seventh = 'Major'
-    elif '7' in flavor and not 'maj7' in flavor and not 'M7' in flavor and not 'dim7' in flavor:
-        seventh = 'Minor'
-    elif 'm7' in flavor:
-        seventh = 'Minor'
-    elif 'dim7' in flavor:
-        seventh = 'Diminished'
-    chord = chord_trie.BuiltChord(root, q, seventh)
+    chord = chord_trie.BuiltChord(root, flavor)
     chord.buildchord()
     octaves = []
     if not chord.notes:

@@ -33,46 +33,50 @@ class TheoryEngine:
     @staticmethod
     def get_absolute_chord(key_root, symbol, quality="Major"):
         import re
-        m = re.match(r"([b#♭]?(?:i{1,3}|iv|vii|vi|v|IV|VII|VI|V|I{1,3}))(.*)", symbol)
+        # Accept sharps/flats in root and roman, and pass through all extensions
+        m = re.match(r"([b#♭♯]?((?:i{1,3})|iv|vii|vi|v|IV|VII|VI|V|I{1,3}))(.*)", symbol, re.IGNORECASE)
         if not m:
             return symbol
-        root_part, flavor = m.group(1), m.group(2)
-        root_part = root_part.replace('♭', 'b')
-
-        diatonic_qualities = {
-            'Major': {
-                'I': '', 'ii': 'm', 'iii': 'm', 'IV': '', 'V': '', 'vi': 'm', 'vii': 'dim',
-                'bII': '', 'bIII': '', 'bVI': '', 'bVII': '', 'bV': '', 'bvii': 'dim', 'bv': '',
-            },
-            'Minor': {
-                'i': 'm', 'ii': 'dim', 'III': '', 'iv': 'm', 'v': 'm', 'VI': '', 'VII': '',
-                'bII': '', 'bIII': '', 'bVI': '', 'bVII': '', 'bV': '', 'bvii': 'dim', 'bv': '',
-            }
-        }
-        mode_map = TheoryEngine.MODES.get(quality, TheoryEngine.MODES["Major"])
-        if root_part not in mode_map:
-            return symbol
-        key_root_fixed = key_root
+        root_part, flavor = m.group(1), m.group(3)
+        # Normalize flats/sharps
+        root_part = root_part.replace('♭', 'b').replace('♯', '#')
+        key_root_fixed = key_root.replace('♭', 'b').replace('♯', '#')
         if key_root_fixed == "Bb": key_root_fixed = "A#"
         elif key_root_fixed == "Eb": key_root_fixed = "D#"
         elif key_root_fixed == "Ab": key_root_fixed = "G#"
         elif key_root_fixed == "Db": key_root_fixed = "C#"
         elif key_root_fixed == "Gb": key_root_fixed = "F#"
-        key_root_fixed = key_root_fixed.replace('b', 'b').replace('#', '#')
         try:
             start_idx = TheoryEngine.NOTES.index(key_root_fixed.upper())
-            offset = mode_map[root_part]
-            chord_note = TheoryEngine.NOTES[(start_idx + offset) % 12]
-            # Determine diatonic quality
+            mode_map = TheoryEngine.MODES.get(quality, TheoryEngine.MODES["Major"])
+            # Special handling for bI and #I (chromatic root alterations)
+            if root_part.lower() == 'bi':
+                chord_note = TheoryEngine.NOTES[(start_idx - 1) % 12]
+            elif root_part.lower() == '#i':
+                chord_note = TheoryEngine.NOTES[(start_idx + 1) % 12]
+            else:
+                offset = mode_map[root_part]
+                chord_note = TheoryEngine.NOTES[(start_idx + offset) % 12]
+            # Diatonic quality
             roman = root_part.replace('b','').replace('#','')
+            diatonic_qualities = {
+                'Major': {
+                    'I': '', 'ii': 'm', 'iii': 'm', 'IV': '', 'V': '', 'vi': 'm', 'vii': 'dim',
+                    'bII': '', 'bIII': '', 'bVI': '', 'bVII': '', 'bV': '', 'bvii': 'dim', 'bv': '',
+                },
+                'Minor': {
+                    'i': 'm', 'ii': 'dim', 'III': '', 'iv': 'm', 'v': 'm', 'VI': '', 'VII': '',
+                    'bII': '', 'bIII': '', 'bVI': '', 'bVII': '', 'bV': '', 'bvii': 'dim', 'bv': '',
+                }
+            }
             qmap = diatonic_qualities['Minor' if quality=="Minor" else 'Major']
-            # If flavor already specifies m, dim, aug, 7, etc, use it; otherwise, use diatonic
+            # If flavor doesn't specify m, dim, aug, 7, etc, use diatonic
             if not flavor or not (flavor.startswith('m') or 'dim' in flavor or 'aug' in flavor):
                 if roman in qmap and qmap[roman]:
                     flavor = qmap[roman] + flavor
-            # For diminished, use 'dim' not 'm' (e.g., vii in major is Bdim)
             if 'dim' in flavor and not flavor.startswith('dim'):
                 flavor = 'dim' + flavor.replace('dim','')
+            # Pass through all extensions (including b9/#9)
             return f"{chord_note}{flavor}"
         except Exception:
             return symbol
@@ -156,39 +160,130 @@ class ChordTrie:
         return []
     
 class BuiltChord:
-    def __init__(self, root, quality, seventh=None):
+    def __init__(self, root, flavor):
         self.root = root
-        self.quality = quality
-        self.seventh = seventh
-        self.display_name = TheoryEngine.get_absolute_chord(root, quality)
+        self.flavor = flavor.lower() if flavor else ''
+        # Parse quality and seventh for compatibility
+        if 'dim' in self.flavor and 'dim7' not in self.flavor:
+            self.quality = 'Diminished'
+        elif 'aug' in self.flavor:
+            self.quality = 'Augmented'
+        elif 'm' in self.flavor and not self.flavor.startswith('M'):
+            self.quality = 'Minor'
+        else:
+            self.quality = 'Major'
+        self.display_name = root + flavor if flavor else root
         self.notes = []
         self.frequencies = []
 
     def buildchord(self):
+        # Always start with the root
         if self.root:
             self.notes.append(self.root)
         else:
             self.notes.append("")
-        if self.quality == "Major":
-            self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 4) % 12])
-            self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 7) % 12]) 
-        elif self.quality == "Minor":
-            self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 3) % 12]) 
-            self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 7) % 12]) 
-        elif self.quality == "Diminished":
-            self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 3) % 12]) 
-            self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 6) % 12]) 
-        elif self.quality == "Augmented":
-            self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 4) % 12])  
-            self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 8) % 12])  
-        # Add 7th if specified
-        if self.seventh:
-            if self.seventh == "Major":
-                self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 11) % 12])
-            elif self.seventh == "Minor":
-                self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 10) % 12])
-            elif self.seventh == "Diminished":
-                self.notes.append(TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 9) % 12])
+
+        def interval(semitones):
+            return TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + semitones) % 12]
+
+        # Parse extensions from self.display_name or self.seventh
+        ext = self.display_name.lower() if hasattr(self, 'display_name') else ''
+        # Parse for all allowed extensions in order of musical priority
+        # 1. sus2/sus4/sus24
+        sus2 = 'sus2' in ext
+        sus4 = 'sus4' in ext
+        sus24 = 'sus24' in ext or 'sus2sus4' in ext
+        # 2. triad base
+        if 'dim' in ext and 'dim7' not in ext:
+            third = interval(3)
+            fifth = interval(6)
+        elif 'aug' in ext:
+            third = interval(4)
+            fifth = interval(8)
+        elif 'm' in ext and not sus2 and not sus4 and not sus24:
+            third = interval(3)
+            fifth = interval(7)
+        else:
+            third = interval(4)
+            fifth = interval(7)
+        # sus overrides third
+        if sus24:
+            third = interval(2)
+            self.notes.append(third)
+            self.notes.append(interval(5))
+        elif sus2:
+            third = interval(2)
+            self.notes.append(third)
+        elif sus4:
+            third = interval(5)
+            self.notes.append(third)
+        else:
+            self.notes.append(third)
+        self.notes.append(fifth)
+
+        # 3. 6th, 7th, 9th, 11th, 13th, add9, etc.
+        if '6/9' in ext:
+            self.notes.append(interval(9))
+            self.notes.append(interval(14))
+        elif '6' in ext and '13' not in ext:
+            self.notes.append(interval(9))
+        if 'maj7' in ext or 'Δ7' in ext:
+            self.notes.append(interval(11))
+        elif 'm7' in ext or 'min7' in ext or (self.quality == "Minor" and '7' in ext):
+            self.notes.append(interval(10))
+        elif '7' in ext and 'dim7' not in ext and 'maj7' not in ext:
+            self.notes.append(interval(10))
+        elif 'dim7' in ext or 'o7' in ext:
+            self.notes.append(interval(9))
+        # 9th: always a major 9th above the root, not relative to the key
+        if '9' in ext and 'add9' not in ext:
+            ninth = TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 2) % 12]  # major 9th = root + 2 semitones (octave up)
+            self.notes.append(ninth)
+        elif 'add9' in ext:
+            ninth = TheoryEngine.NOTES[(TheoryEngine.NOTES.index(self.root) + 2) % 12]
+            self.notes.append(ninth)
+        if '11' in ext:
+            self.notes.append(interval(17))
+        if '13' in ext:
+            self.notes.append(interval(21))
+
+        # 4. b5/#5, b9/#9, b13/#11
+        if 'b5' in ext:
+            self.notes[2] = interval(6)
+        if '#5' in ext:
+            self.notes[2] = interval(8)
+        if 'b9' in ext:
+            self.notes.append(interval(13))
+        if '#9' in ext:
+            self.notes.append(interval(15))
+        if 'b13' in ext:
+            self.notes.append(interval(20))
+        if '#11' in ext:
+            self.notes.append(interval(18))
+
+        # 5. no5/no3
+        if 'no5' in ext and len(self.notes) > 2:
+            self.notes.pop(2)
+        if 'no3' in ext and len(self.notes) > 1:
+            self.notes.pop(1)
+
+        # 6. alt (altered dominant: b5, #5, b9, #9, #11, b13)
+        if 'alt' in ext:
+            self.notes[2] = interval(6)  # b5
+            self.notes.append(interval(8))  # #5
+            self.notes.append(interval(13)) # b9
+            self.notes.append(interval(15)) # #9
+            self.notes.append(interval(18)) # #11
+            self.notes.append(interval(20)) # b13
+
+        # Remove duplicates, preserve order
+        seen = set()
+        out = []
+        for n in self.notes:
+            if n not in seen:
+                out.append(n)
+                seen.add(n)
+        self.notes = out
         return self.notes
     def build_frequencies(self, TheoryEngine):
         # Always put root in octave 4, stack other notes above

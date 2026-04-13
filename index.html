@@ -406,35 +406,36 @@
 
 <script>
     // --- LOGIN & REGISTER LOGIC ---
-
-    // Use localStorage to persist login state
-    function isUserLoggedIn() {
-        return localStorage.getItem('isLoggedIn') === 'true';
-    }
-
-    function setUserLoggedIn(val) {
-        localStorage.setItem('isLoggedIn', val ? 'true' : 'false');
-    }
-
-    function setLoggedInUsername(username) {
-        if (username) {
-            localStorage.setItem('loggedInUser', username);
-        } else {
-            localStorage.removeItem('loggedInUser');
+    // Session-based login state
+    let currentUser = null;
+    async function checkLoginStatus() {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/me', {
+                method: 'GET',
+                credentials: 'include'
+            });
+            const data = await response.json();
+            if (response.ok && data.status === 'success') {
+                currentUser = data.username;
+                return true;
+            } else {
+                currentUser = null;
+                return false;
+            }
+        } catch (err) {
+            currentUser = null;
+            return false;
         }
     }
 
-    function getLoggedInUsername() {
-        return localStorage.getItem('loggedInUser') || '';
-    }
-
-    function updateAuthUI() {
+    async function updateAuthUI() {
+        const loggedIn = await checkLoginStatus();
         const loginBtn = document.getElementById('login-btn');
         const registerBtn = document.getElementById('register-btn');
         const logoutBtnMobile = document.getElementById('logout-btn-mobile');
         const logoutBtnDesktop = document.getElementById('logout-btn-desktop');
         const logoutBottom = document.getElementById('logout-bottom');
-        if (isUserLoggedIn()) {
+        if (loggedIn) {
             if (loginBtn) loginBtn.style.display = 'none';
             if (registerBtn) registerBtn.style.display = 'none';
             if (logoutBtnMobile) logoutBtnMobile.style.display = 'block';
@@ -460,14 +461,13 @@
             const response = await fetch('http://127.0.0.1:8000/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ username, password })
             });
             const data = await response.json();
             if (response.ok && data.status === 'success') {
                 alert('Login successful!');
-                setUserLoggedIn(true);
-                setLoggedInUsername(username);
-                updateAuthUI();
+                await updateAuthUI();
                 loadProjectList();
             } else {
                 alert(data.message || 'Login failed.');
@@ -476,11 +476,15 @@
             alert('Could not connect to server.');
         }
     }
-    // Optional: Add logout button and logic
-    function logout() {
-        setUserLoggedIn(false);
-        setLoggedInUsername("");
-        updateAuthUI();
+
+    async function logout() {
+        try {
+            await fetch('http://127.0.0.1:8000/logout', {
+                method: 'POST',
+                credentials: 'include'
+            });
+        } catch (err) {}
+        await updateAuthUI();
         loadProjectList();
         alert('Logged out.');
     }
@@ -881,15 +885,44 @@ renderPianoDiagram([]);
     function addManualChord() {
         const val = document.getElementById('manualInput').value.trim();
         if (!val) return;
-        // Validate chord using the same logic as backend
-        // Accepts roman numerals with optional flavor (e.g. IV, iim7, V7, etc)
-        const romanRegex = /^([b♭]?[iIvV]{1,3})(.*)$/;
-        if (!romanRegex.test(val)) {
+        // Simple strict validation: Accepts only I, II, III, IV, V, VI, VII (upper/lower), with optional accidental and extension
+        // Examples: I, ii, IV7, bVI, #V7, etc. Rejects: iiii, iiiii, etc.
+        // Only accept: I, II, III, IV, V, VI, VII (upper/lower), with optional accidental and extension
+        // Rejects: VV, iiii, etc.
+        // Strictest: only I, II, III, IV, V, VI, VII (case-insensitive), with optional accidental and extension
+        // Rejects: VV, iiii, etc.
+        const romanMatch = /^(?:[b#♭♯]?)(I|II|III|IV|V|VI|VII)([a-zA-Z0-9\+\-\(\)]*)$/i.exec(val);
+        if (!romanMatch) {
             alert('Invalid chord symbol. Use roman numerals like IV, ii, V7, etc.');
             return;
         }
-        addChord(val);
-        document.getElementById('manualInput').value = '';
+        // Only allow recognized chord extensions
+        const allowedExtensions = [
+            '', '7', '9', '11', '13', 'maj7', 'm7', 'min7', 'm', 'min', 'sus2', 'sus4', 'dim', 'aug', 'add9', '6', 'maj9', 'maj13', 'm9', 'm11', 'm13', 'b5', '#5', 'b9', '#9', 'b13', '#11', 'sus', '6/9', '7b5', '7#5', '7b9', '7#9', 'maj', 'm6', 'mmaj7', 'ø', 'o', 'dim7', 'alt', 'no5', 'no3', 'sus2sus4', 'sus24'
+        ];
+        const ext = romanMatch[2].toLowerCase();
+        if (ext && !allowedExtensions.some(e => ext === e)) {
+            alert('Unrecognized or unsupported chord extension.');
+            return;
+        }
+        // Check with backend if this chord symbol produces notes in the current key/quality
+        fetch('http://127.0.0.1:8000/get_chord_notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chord: val, key: project.key, quality: project.quality })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.notes && Array.isArray(data.notes) && data.notes.length > 0) {
+                addChord(val);
+                document.getElementById('manualInput').value = '';
+            } else {
+                alert('This chord symbol is not recognized as a valid chord in the current key.');
+            }
+        })
+        .catch(() => {
+            alert('Could not validate chord with backend.');
+        });
     }
 
     async function loadProjectList() {
