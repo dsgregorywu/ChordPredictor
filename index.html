@@ -771,7 +771,14 @@ function renderPianoDiagram(highlightNotes=[]) {
 }
 
 // Re-render piano diagram on resize to update visible range
-window.addEventListener('resize', () => renderPianoDiagram());
+// Debounced resize event to prevent jitter
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        renderPianoDiagram();
+    }, 100);
+});
 
 // --- Highlight Chord on Piano ---
 function highlightChordOnPiano(symbol, key, quality) {

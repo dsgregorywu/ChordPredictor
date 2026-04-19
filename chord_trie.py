@@ -1,6 +1,6 @@
 import csv
 import numpy as np
-import sounddevice as sd
+# import sounddevice as sd
 
 class TheoryEngine:
     NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]    
@@ -33,11 +33,14 @@ class TheoryEngine:
     @staticmethod
     def get_absolute_chord(key_root, symbol, quality="Major"):
         import re
-        # Accept sharps/flats in root and roman, and pass through all extensions
-        m = re.match(r"([b#♭♯]?((?:i{1,3})|iv|vii|vi|v|IV|VII|VI|V|I{1,3}))(.*)", symbol, re.IGNORECASE)
+        # Improved regex: match optional accidental, then the longest valid roman numeral, then the rest as extension/flavor
+        roman_regex = r"^([b#♭♯]?((?:vii|iii|ii|iv|vi|bvii|biii|bii|bvi|biv|biv|bV|bVII|bIII|bII|bVI|bV|I{1,3}|V{1,3}|i{1,3}|v{1,3})))"
+        m = re.match(roman_regex, symbol, re.IGNORECASE)
         if not m:
             return symbol
-        root_part, flavor = m.group(1), m.group(3)
+        root_part = m.group(1)
+        flavor = symbol[len(root_part):]  # Everything after the roman numeral is the flavor/extension
+        # Normalize flats/sharps
         root_part = root_part.replace('♭', 'b').replace('♯', '#')
         key_root_fixed = key_root.replace('♭', 'b').replace('♯', '#')
         if key_root_fixed == "Bb": key_root_fixed = "A#"
@@ -48,14 +51,8 @@ class TheoryEngine:
         try:
             start_idx = TheoryEngine.NOTES.index(key_root_fixed.upper())
             mode_map = TheoryEngine.MODES.get(quality, TheoryEngine.MODES["Major"])
-            # Special handling for bI and #I (chromatic root alterations)
-            if root_part.lower() == 'bi':
-                chord_note = TheoryEngine.NOTES[(start_idx - 1) % 12]
-            elif root_part.lower() == '#i':
-                chord_note = TheoryEngine.NOTES[(start_idx + 1) % 12]
-            else:
-                offset = mode_map[root_part]
-                chord_note = TheoryEngine.NOTES[(start_idx + offset) % 12]
+            offset = mode_map[root_part]
+            chord_note = TheoryEngine.NOTES[(start_idx + offset) % 12]
             # Diatonic quality
             roman = root_part.replace('b','').replace('#','')
             diatonic_qualities = {
@@ -308,6 +305,7 @@ class BuiltChord:
         Play the chord using sounddevice and numpy (sine waves for each note).
         duration: duration of each note in seconds
         """
+        import sounddevice as sd
         freqs = self.build_frequencies(TheoryEngine)
         samplerate = 44100
         t = np.linspace(0, duration, int(samplerate * duration), False)

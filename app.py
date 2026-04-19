@@ -10,7 +10,7 @@ import sounddevice as sd
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
-app.secret_key = 'super-secret-key'  # Change this in production!
+app.secret_key = 'thisismykeyanditisasecret420' 
 
 # --- AUTHENTICATION ---
 def hash_password(password):
@@ -151,44 +151,7 @@ class TheoryEngine:
         'iv': 5, 'IV': 5, 'v': 7, 'V': 7, 'vi': 8, 'VI': 8, 'vii': 10, 'VII': 10
     }
 
-    @staticmethod
-    def get_absolute_chord(key_root, symbol, quality="Major"):
-        import re
-        m = re.match(r"([b♭]?[iIvV]{1,3})(.*)", symbol)
-        if not m:
-            return symbol
-        root_part, flavor = m.group(1), m.group(2)
-        root_part = root_part.replace('♭', 'b')
-        if quality == "Minor":
-            current_map = TheoryEngine.MINOR_MAP
-        else:
-            current_map = TheoryEngine.MAJOR_MAP
-        if root_part not in current_map:
-            return symbol
-        key_root_fixed = key_root.replace('b', '#')
-        if key_root_fixed == "Bb": key_root_fixed = "A#"
-        if key_root_fixed == "Eb": key_root_fixed = "D#"
-        if key_root_fixed == "Ab": key_root_fixed = "G#"
-        if key_root_fixed == "Db": key_root_fixed = "C#"
-        if key_root_fixed == "Gb": key_root_fixed = "F#"
-        try:
-            start_idx = TheoryEngine.NOTES.index(key_root_fixed.upper())
-            offset = current_map[root_part]
-            chord_note = TheoryEngine.NOTES[(start_idx + offset) % 12]
-            # Explicitly set flavor for major/minor if not present, based on roman numeral case
-            if root_part[0].islower():
-                if not (flavor.startswith('m') or flavor.startswith('M') or 'dim' in flavor or 'aug' in flavor):
-                    flavor = 'm' + flavor
-            else:
-                if flavor.startswith('m') or flavor.startswith('M'):
-                    pass  # already minor
-                elif 'dim' in flavor or 'aug' in flavor:
-                    pass  # already special
-                else:
-                    flavor = '' + flavor  # ensure major is explicit (no 'm')
-            return f"{chord_note}{flavor}"
-        except:
-            return symbol
+    # REMOVED: Use chord_trie.TheoryEngine.get_absolute_chord instead for all chord mapping
 
 class ChordNode:
     def __init__(self, chord=""):
@@ -249,7 +212,7 @@ class ChordTrie:
                     continue
                 denom = sum(n.mode_counts[quality] for n in node.children.values() if n.mode_counts[quality] > 0)
                 prob = mode_weight / denom if denom > 0 else 0
-                display_name = TheoryEngine.get_absolute_chord(key, sym, quality)
+                display_name = chord_trie.TheoryEngine.get_absolute_chord(key, sym, quality)
                 results.append({
                     "symbol": sym,
                     "display": display_name,
@@ -410,4 +373,5 @@ def get_chord_notes():
 
 if __name__ == '__main__':
     init_data()
+    print("Starting Flask app...")
     app.run(debug=True, port=8000)
