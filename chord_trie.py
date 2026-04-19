@@ -38,7 +38,6 @@ class TheoryEngine:
         if not m:
             return symbol
         root_part, flavor = m.group(1), m.group(3)
-        # Normalize flats/sharps
         root_part = root_part.replace('♭', 'b').replace('♯', '#')
         key_root_fixed = key_root.replace('♭', 'b').replace('♯', '#')
         if key_root_fixed == "Bb": key_root_fixed = "A#"
