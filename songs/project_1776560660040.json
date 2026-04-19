@@ -1,0 +1,18 @@
+{
+    "genre": "Popular",
+    "id": "1776560660040",
+    "key": "C",
+    "owner": "derec",
+    "quality": "Major",
+    "sections": [
+        {
+            "chords": [
+                "I",
+                "vi"
+            ],
+            "id": 1776560660040,
+            "name": "Section 1"
+        }
+    ],
+    "title": "My New Song"
+}

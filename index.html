@@ -10,6 +10,36 @@
     <style>
         :root { --sidebar-width: 250px; --accent: #4CAF50; --dark: #1f2937; --bg: #f3f4f6; }
         body { background-color: var(--bg); display: flex; font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; margin: 0; flex-direction: row; }
+        /* ...existing code... */
+    </style>
+</head>
+<body>
+<!-- ...existing HTML... -->
+<script>
+// Returns true if a user is logged in
+function isUserLoggedIn() {
+    return !!getLoggedInUsername();
+}
+// Returns the logged-in username from localStorage (set on login)
+function getLoggedInUsername() {
+    return localStorage.getItem('username') || null;
+}
+// ...existing JS code...
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChordTrie | Songwriter Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        :root { --sidebar-width: 250px; --accent: #4CAF50; --dark: #1f2937; --bg: #f3f4f6; }
+        body { background-color: var(--bg); display: flex; font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; margin: 0; flex-direction: row; }
         
         /* Sidebar */
         #sidebar {
@@ -466,6 +496,7 @@
             });
             const data = await response.json();
             if (response.ok && data.status === 'success') {
+                localStorage.setItem('username', username);
                 alert('Login successful!');
                 await updateAuthUI();
                 loadProjectList();
@@ -484,6 +515,7 @@
                 credentials: 'include'
             });
         } catch (err) {}
+        localStorage.removeItem('username');
         await updateAuthUI();
         loadProjectList();
         alert('Logged out.');
@@ -950,12 +982,22 @@ renderPianoDiagram([]);
     async function openProject(filename) {
         const response = await fetch(`http://127.0.0.1:8000/load_project/${filename}`);
         const savedData = await response.json();
-        project = savedData; 
+        // Ensure all required fields exist with defaults
+        project = {
+            id: savedData.id || filename.replace('project_','').replace('.json',''),
+            title: savedData.title || 'Untitled Song',
+            key: savedData.key || 'C',
+            quality: savedData.quality || 'Major',
+            genre: savedData.genre || 'Popular',
+            sections: Array.isArray(savedData.sections) && savedData.sections.length > 0 ? savedData.sections : [{ id: Date.now(), name: "Verse 1", chords: [] }],
+            owner: savedData.owner || null
+        };
         document.getElementById('projectTitle').value = project.title;
         document.getElementById('keyRoot').value = project.key;
         document.getElementById('keyType').value = project.quality;
         document.getElementById('genre').value = project.genre;
-        activeSectionId = project.sections[0].id;
+        // Set activeSectionId safely
+        activeSectionId = project.sections[0] ? project.sections[0].id : null;
         renderProject();
         getPredictions();
     }

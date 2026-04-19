@@ -1,0 +1,20 @@
+{
+    "genre": "Popular",
+    "id": "1776560963558",
+    "key": "F",
+    "owner": "testuser",
+    "quality": "Major",
+    "sections": [
+        {
+            "chords": [
+                "I",
+                "V",
+                "IV",
+                "I"
+            ],
+            "id": 1776560963558,
+            "name": "Section 1"
+        }
+    ],
+    "title": "My New Song"
+}
