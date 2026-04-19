@@ -892,26 +892,14 @@ renderPianoDiagram([]);
     function addManualChord() {
         const val = document.getElementById('manualInput').value.trim();
         if (!val) return;
-        // Simple strict validation: Accepts only I, II, III, IV, V, VI, VII (upper/lower), with optional accidental and extension
-        // Examples: I, ii, IV7, bVI, #V7, etc. Rejects: iiii, iiiii, etc.
-        // Only accept: I, II, III, IV, V, VI, VII (upper/lower), with optional accidental and extension
-        // Rejects: VV, iiii, etc.
-        // Strictest: only I, II, III, IV, V, VI, VII (case-insensitive), with optional accidental and extension
-        // Rejects: VV, iiii, etc.
-        const romanMatch = /^(?:[b#♭♯]?)(I|II|III|IV|V|VI|VII)([a-zA-Z0-9\+\-\(\)]*)$/i.exec(val);
+        // Improved validation: Accepts upper/lowercase Roman numerals (i, ii, iii, IV, etc.), with optional accidental and extension
+        // Examples: I, ii, IV7, bVI, #V7, biii, bvii, etc. Rejects: iiii, iiiii, VV, etc.
+        const romanMatch = /^(?:[b#♭♯]?)(i{1,3}|iv|vii|vi|v|IV|VII|VI|V|I{1,3})([a-zA-Z0-9\+\-\(\)]*)$/i.exec(val);
         if (!romanMatch) {
             alert('Invalid chord symbol. Use roman numerals like IV, ii, V7, etc.');
             return;
         }
-        // Only allow recognized chord extensions
-        const allowedExtensions = [
-            '', '7', '9', '11', '13', 'maj7', 'm7', 'min7', 'm', 'min', 'sus2', 'sus4', 'dim', 'aug', 'add9', '6', 'maj9', 'maj13', 'm9', 'm11', 'm13', 'b5', '#5', 'b9', '#9', 'b13', '#11', 'sus', '6/9', '7b5', '7#5', '7b9', '7#9', 'maj', 'm6', 'mmaj7', 'ø', 'o', 'dim7', 'alt', 'no5', 'no3', 'sus2sus4', 'sus24'
-        ];
-        const ext = romanMatch[2].toLowerCase();
-        if (ext && !allowedExtensions.some(e => ext === e)) {
-            alert('Unrecognized or unsupported chord extension.');
-            return;
-        }
+        // Allow any extension, let backend validate
         // Check with backend if this chord symbol produces notes in the current key/quality
         fetch('http://127.0.0.1:8000/get_chord_notes', {
             method: 'POST',
